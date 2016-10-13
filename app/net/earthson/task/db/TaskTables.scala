@@ -1,6 +1,6 @@
 package net.earthson.task.db
 
-import net.earthson.task.Task
+import net.earthson.task.{Task, TaskIn}
 import slick.driver.JdbcProfile
 
 trait TaskTables {
@@ -13,18 +13,14 @@ trait TaskTables {
     *
     * @param tag
     */
-  class TableTask(tag: Tag) extends Table[Task](tag, "algo_pack") {
-    def pool = column[String]("pool", O.PrimaryKey, O.SqlType("VARCHAR(128)"))
+  class TableTask(tag: Tag) extends Table[Task](tag, "task") {
+    def id = column[Long]("id", O.PrimaryKey)
 
-    def `type` = column[String]("type", O.SqlType("VARCHAR(32)"))
+    def pool = column[String]("pool")
 
-    def key = column[String]("key", O.SqlType("VARCHAR(128)"))
+    def `type` = column[String]("type")
 
-    def rangeL = column[Long]("range_l")
-
-    def rangeR = column[Long]("range_r")
-
-    def createTime = column[Long]("create_time")
+    def key = column[String]("key")
 
     def startTime = column[Option[Long]]("start_time")
 
@@ -38,22 +34,26 @@ trait TaskTables {
 
     def tryLimit = column[Int]("tryLimit")
 
+    def timeout = column[Long]("timeout")
+
     def log = column[String]("log")
+
+    def idx = index("idx_query", (pool, `type`, key))
 
     def * =
       (
+        id,
         pool,
         `type`,
         key,
-        rangeL,
-        rangeR,
-        createTime,
+        id,
         options,
         status,
         startTime,
         endTime,
         tryCount,
         tryLimit,
+        timeout,
         log
         ) <>
         ((Task.apply _).tupled, Task.unapply)
@@ -61,8 +61,38 @@ trait TaskTables {
 
   val TableTask = TableQuery[TableTask]
 
+  abstract class TableTaskQueue(tag: Tag, tableName: String) extends Table[TaskIn](tag, tableName) {
+    def id = column[Long]("id", O.PrimaryKey)
+
+    def time = column[Long]("time")
+
+    def fk = foreignKey("id", id, TableTask)(_.id, onDelete = ForeignKeyAction.Cascade)
+
+    def * = (id, time) <> ((TaskIn.apply _).tupled, TaskIn.unapply)
+  }
+
+  class TableTaskPending(tag: Tag) extends TableTaskQueue(tag, "task_pending")
+
+  val TableTaskPending = TableQuery[TableTaskPending]
+
+  class TableTaskSuccess(tag: Tag) extends TableTaskQueue(tag, "task_success")
+
+  val TableTaskSuccess = TableQuery[TableTaskSuccess]
+
+  class TableTaskFail(tag: Tag) extends TableTaskQueue(tag, "task_fail")
+
+  val TableTaskFail = TableQuery[TableTaskFail]
+
+  class TableTaskBlock(tag: Tag) extends TableTaskQueue(tag, "task_block")
+
+  val TableTaskBlock = TableQuery[TableTaskBlock]
+
   val tables =
     Seq(
-      TableTask
+      TableTask,
+      TableTaskPending,
+      TableTaskSuccess,
+      TableTaskFail,
+      TableTaskBlock
     )
 }

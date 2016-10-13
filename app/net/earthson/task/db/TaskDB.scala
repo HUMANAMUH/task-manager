@@ -5,7 +5,7 @@ import java.sql.SQLException
 import akka.actor.ActorRef
 import com.typesafe.scalalogging.LazyLogging
 import play.api.db.slick.{DatabaseConfigProvider, HasDatabaseConfig}
-import slick.driver.{JdbcProfile, PostgresDriver}
+import slick.driver.{JdbcProfile, SQLiteDriver}
 
 import scala.util.{Failure, Success, Try}
 
@@ -13,9 +13,9 @@ trait TaskDB
   extends TaskTables
     with HasDatabaseConfig[JdbcProfile]
     with LazyLogging {
-  def dbConfigProvider: DatabaseConfigProvider
+  def databaseConfigProvider: DatabaseConfigProvider
 
-  override val dbConfig = dbConfigProvider.get[JdbcProfile]
+  override val dbConfig = databaseConfigProvider.get[JdbcProfile]
 
   def doOnComplete[T](dst: ActorRef, id: Option[String] = None)(result: Try[T]): Unit = result match {
     //case Failure(_: MySQLIntegrityConstraintViolationException) => dst ! Failure(KeyDuplicateError(id.get))
@@ -40,7 +40,7 @@ trait TaskDB
 object WhaleDB
   extends TaskTables {
 
-  override protected val driver: JdbcProfile = PostgresDriver
+  override protected val driver: JdbcProfile = SQLiteDriver
   import driver.api._
 
   def evolutionStr() = {
