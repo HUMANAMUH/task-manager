@@ -5,7 +5,7 @@ package net.earthson.task
   */
 sealed trait TaskCtrl
 
-case class FetchTask(pool: String) extends TaskCtrl
+case class FetchTask(pool: String, limit: Int = 1) extends TaskCtrl
 
 case class AddTask(
                        pool: String,
@@ -21,9 +21,9 @@ case class AddTask(
   }
 }
 
-case class FailTask(id: String) extends TaskCtrl
+case class FailTask(id: Long) extends TaskCtrl
 
-case class SucceedTask(id: String) extends TaskCtrl
+case class SucceedTask(id: Long) extends TaskCtrl
 
-case class BlockTask(id: String) extends TaskCtrl
+case class BlockTask(id: Long) extends TaskCtrl
 

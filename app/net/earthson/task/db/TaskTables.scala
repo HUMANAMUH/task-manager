@@ -38,7 +38,9 @@ trait TaskTables {
 
     def log = column[String]("log")
 
-    def idx = index("idx_query", (pool, `type`, key))
+    def idx1 = index("idx_query", (pool, `type`, key))
+
+    def idx2 = index("idx_status", status)
 
     def * =
       (
@@ -71,28 +73,8 @@ trait TaskTables {
     def * = (id, time) <> ((TaskIn.apply _).tupled, TaskIn.unapply)
   }
 
-  class TableTaskPending(tag: Tag) extends TableTaskQueue(tag, "task_pending")
-
-  val TableTaskPending = TableQuery[TableTaskPending]
-
-  class TableTaskSuccess(tag: Tag) extends TableTaskQueue(tag, "task_success")
-
-  val TableTaskSuccess = TableQuery[TableTaskSuccess]
-
-  class TableTaskFail(tag: Tag) extends TableTaskQueue(tag, "task_fail")
-
-  val TableTaskFail = TableQuery[TableTaskFail]
-
-  class TableTaskBlock(tag: Tag) extends TableTaskQueue(tag, "task_block")
-
-  val TableTaskBlock = TableQuery[TableTaskBlock]
-
   val tables =
     Seq(
-      TableTask,
-      TableTaskPending,
-      TableTaskSuccess,
-      TableTaskFail,
-      TableTaskBlock
+      TableTask
     )
 }
