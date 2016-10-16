@@ -38,7 +38,7 @@ trait TaskTables {
 
     def log = column[String]("log")
 
-    def idx1 = index("idx_query", (pool, `type`, key))
+    def idx1 = index("idx_query", (pool, `type`, key), unique = true)
 
     def idx2 = index("idx_status", status)
 
@@ -62,16 +62,6 @@ trait TaskTables {
   }
 
   val TableTask = TableQuery[TableTask]
-
-  abstract class TableTaskQueue(tag: Tag, tableName: String) extends Table[TaskIn](tag, tableName) {
-    def id = column[Long]("id", O.PrimaryKey)
-
-    def time = column[Long]("time")
-
-    def fk = foreignKey("id", id, TableTask)(_.id, onDelete = ForeignKeyAction.Cascade)
-
-    def * = (id, time) <> ((TaskIn.apply _).tupled, TaskIn.unapply)
-  }
 
   val tables =
     Seq(

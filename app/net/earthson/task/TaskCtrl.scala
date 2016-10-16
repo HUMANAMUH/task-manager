@@ -1,5 +1,7 @@
 package net.earthson.task
 
+import play.api.libs.json.Json
+
 /**
   * Created by earthson on 10/12/16.
   */
@@ -21,9 +23,15 @@ case class AddTask(
   }
 }
 
+object AddTask {
+  implicit val fmt = Json.format[AddTask]
+}
+
 case class FailTask(id: Long) extends TaskCtrl
 
 case class SucceedTask(id: Long) extends TaskCtrl
 
 case class BlockTask(id: Long) extends TaskCtrl
+
+case class DeleteTask(id: Long) extends TaskCtrl
 

@@ -1,4 +1,4 @@
-name := """test"""
+name := """task-manager"""
 
 version := "1.0-SNAPSHOT"
 
