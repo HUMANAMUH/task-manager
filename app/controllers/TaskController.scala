@@ -8,11 +8,12 @@ import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
 import net.earthson.task._
 import play.api.db.slick.DatabaseConfigProvider
-import play.api.libs.json.Json
+import play.api.libs.json._
 import play.api.mvc._
 
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.{ExecutionContext, Future}
+import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -42,50 +43,37 @@ class TaskController @Inject()(actorSystem: ActorSystem)(implicit exec: Executio
     }
   }
 
-  def fetch = Action.async{ request =>
-    val pool = request.getQueryString("pool").get
-    val limit = request.getQueryString("limit").map(_.toInt).getOrElse(1)
-    (taskManager ? FetchTask(pool, limit)).mapTo[Try[Seq[Task]]].flatMap(try2future).map(res => Ok(Json.toJson(res)))
-  }
-
-  def create = Action.async(parse.json.map(_.as[AddTask])) { request =>
-    logger.debug("request create")
-    (taskManager ? request.body).mapTo[Try[Boolean]].flatMap(try2future).map(res => Ok(Json.toJson(res)))
-  }
-
-  def success = Action.async { request =>
-    val id = request.getQueryString("id").map(_.toLong).get
-    (taskManager ? SucceedTask(id)).mapTo[Try[Boolean]].flatMap(try2future).map(res => Ok(Json.toJson(res)))
-  }
-
-  def fail = Action.async { request =>
-      val id = request.getQueryString("id").map(_.toLong).get
-    (taskManager ? FailTask(id)).mapTo[Try[Boolean]].flatMap(try2future).map(res => Ok(Json.toJson(res)))
-  }
-
-  def delete = Action.async { request =>
-    val id = request.getQueryString("id").map(_.toLong).get
-    (taskManager ? DeleteTask(id)).mapTo[Try[Boolean]].flatMap(try2future).map(res => Ok(Json.toJson(res)))
-  }
-
-  /**
-    * Create an Action that returns a plain text message after a delay
-    * of 1 second.
-    *
-    * The configuration in the `routes` file means that this method
-    * will be called when the application receives a `GET` request with
-    * a path of `/message`.
-    */
-  def message = Action.async {
-    getFutureMessage(1.second).map { msg => Ok(msg) }
-  }
-
-  private def getFutureMessage(delayTime: FiniteDuration): Future[String] = {
-    val promise: Promise[String] = Promise[String]()
-    actorSystem.scheduler.scheduleOnce(delayTime) {
-      promise.success("Hi!")
+  def commonAction[T : Reads, R : Writes : ClassTag] = {
+    Action.async(parse.json) { request =>
+      request.body.validate[T] match {
+        case JsSuccess(obj, _) => {
+          (taskManager ? obj).mapTo[Try[R]].flatMap(try2future)
+            .map(res => Ok(Json.toJson(res)))
+            .recover {
+              case e: Exception => {
+                logger.error("Server Error", e)
+                InternalServerError
+              }
+              case t: Throwable => {
+                logger.error("Critical Error, Terminate now!", t)
+                sys.exit(1)
+              }
+            }
+        }
+        case JsError(_) => {
+          Future.successful(BadRequest)
+        }
+      }
     }
-    promise.future
   }
 
+  def start = commonAction[FetchTask, Seq[Task]]
+
+  def create = commonAction[AddTask, Boolean]
+
+  def success = commonAction[SucceedTask, Boolean]
+
+  def fail = commonAction[FailTask, Boolean]
+
+  def delete = commonAction[DeleteTask, Boolean]
 }

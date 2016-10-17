@@ -105,13 +105,20 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
         case _: FailTask => {
           logger.debug("fail task")
           val typedTODO = withTaskType[FailTask](_.isInstanceOf[FailTask])
-          val ids = typedTODO.map(_._1.id)
-          val idsS = ids.mkString(", ")
+          val tasks = typedTODO.map(_._1)
           val futureRes = db.run {
-            sqlu"""
-                     UPDATE task SET status = CASE WHEN tryCount >= tryLimit AND status != 'success' THEN 'fail' ELSE 'pending' END, end_time = ${System.nanoTime()}
-                     WHERE id IN (${idsS})
+            DBIO.seq(
+              tasks.map {
+                case FailTask(id, log) =>
+                  sqlu"""
+                     UPDATE task SET
+                     status = CASE WHEN tryCount >= tryLimit AND status != 'success' THEN 'fail' ELSE 'pending' END,
+                     end_time = ${System.nanoTime()},
+                     log = ${log}
+                     WHERE id = ${id}
                 """
+              } :_*
+            )
           }
           futureRes.onComplete {
             case Success(_) => typedTODO.foreach(_._2.complete(Success(true)))

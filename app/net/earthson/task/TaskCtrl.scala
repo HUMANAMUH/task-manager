@@ -9,6 +9,10 @@ sealed trait TaskCtrl
 
 case class FetchTask(pool: String, limit: Int = 1) extends TaskCtrl
 
+object FetchTask {
+  implicit val fmt = Json.format[FetchTask]
+}
+
 case class AddTask(
                        pool: String,
                        `type`: String,
@@ -27,11 +31,27 @@ object AddTask {
   implicit val fmt = Json.format[AddTask]
 }
 
-case class FailTask(id: Long) extends TaskCtrl
+case class FailTask(id: Long, log: String) extends TaskCtrl
+
+object FailTask {
+  implicit val fmt = Json.format[FailTask]
+}
 
 case class SucceedTask(id: Long) extends TaskCtrl
 
+object SucceedTask {
+  implicit val fmt = Json.format[SucceedTask]
+}
+
 case class BlockTask(id: Long) extends TaskCtrl
 
+object BlockTask {
+  implicit val fmt = Json.format[BlockTask]
+}
+
 case class DeleteTask(id: Long) extends TaskCtrl
+
+object DeleteTask {
+  implicit val fmt = Json.format[DeleteTask]
+}
 

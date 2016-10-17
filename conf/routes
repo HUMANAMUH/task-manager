@@ -3,14 +3,14 @@
 # ~~~~
 
 # An example controller showing a sample home page
-GET     /                           controllers.HomeController.index
+GET          /                    controllers.HomeController.index
 # An example controller showing how to use dependency injection
 # An example controller showing how to write asynchronous code
-GET     /fetch                      controllers.TaskController.fetch
-GET     /delete                     controllers.TaskController.delete
-GET     /success                    controllers.TaskController.success
-GET     /fail                       controllers.TaskController.fail
-POST    /create                     controllers.TaskController.create
+POST         /task/start          controllers.TaskController.start
+POST         /task/delete         controllers.TaskController.delete
+POST         /task/success        controllers.TaskController.success
+POST         /task/fail           controllers.TaskController.fail
+POST         /task/create         controllers.TaskController.create
 
 # Map static resources from the /public folder to the /assets URL path
-GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)
+GET          /assets/*file        controllers.Assets.versioned(path="/public", file: Asset)
