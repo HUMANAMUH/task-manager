@@ -22,6 +22,8 @@ trait TaskTables {
 
     def key = column[String]("key")
 
+    def pendingTime = column[Long]("pending_time")
+
     def startTime = column[Option[Long]]("start_time")
 
     def endTime = column[Option[Long]]("end_time")
@@ -30,9 +32,9 @@ trait TaskTables {
 
     def status = column[String]("status")
 
-    def tryCount = column[Int]("tryCount")
+    def tryCount = column[Int]("try_count")
 
-    def tryLimit = column[Int]("tryLimit")
+    def tryLimit = column[Int]("try_limit")
 
     def timeout = column[Long]("timeout")
 
@@ -40,7 +42,7 @@ trait TaskTables {
 
     def idx1 = index("idx_query", (pool, `type`, key), unique = true)
 
-    def idx2 = index("idx_status", status)
+    def idx2 = index("idx_status", (status, pendingTime))
 
     def * =
       (
@@ -51,6 +53,7 @@ trait TaskTables {
         id,
         options,
         status,
+        pendingTime,
         startTime,
         endTime,
         tryCount,

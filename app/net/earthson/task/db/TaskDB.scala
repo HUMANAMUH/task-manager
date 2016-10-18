@@ -37,7 +37,7 @@ trait TaskDB
   * Created by Earthson on 5/21/15.
   *
   */
-object WhaleDB
+object TaskDB
   extends TaskTables {
 
   override protected val driver: JdbcProfile = SQLiteDriver

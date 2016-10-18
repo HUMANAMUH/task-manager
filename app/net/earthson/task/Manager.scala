@@ -34,10 +34,10 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
   }
 
   def tryDoJob(): Unit = {
-    logger.debug(s"lock: $lock, buffer: ${buffer.size}")
+//    logger.debug(s"lock: $lock, buffer: ${buffer.size}")
     if (!lock && buffer.nonEmpty) {
       lock = true
-      logger.debug(s"buffer.head ${buffer.head}")
+      logger.debug(s"buffer size: ${buffer.size}")
       buffer.head._1 match {
         case FetchTask(pool, limit) => {
           logger.debug("fetch task")
@@ -57,25 +57,24 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                     .filter(x => x.status === Task.Status.Pending || {
                       x.status === Task.Status.Active && (((LiteralColumn(curTime).bind - x.startTime.getOrElse(0L)) / LiteralColumn(1000000L).bind) > x.timeout)
                     })
+                    .sortBy(_.pendingTime)
                     .take(size).result
                   _ <- {
-                    val idset = res.map(_.id).mkString(", ")
-                    logger.debug(s"idset: ${idset}")
+                    val idset = res.map(_.id).mkString("(", ", ", ")")
                     if (res.nonEmpty) {
-                      logger.debug("non-empty task")
                       logger.debug(s"task size: ${res.size}")
-                      sqlu"""
+                      sql"""
                            UPDATE task
                            SET
-                           tryCount = tryCount + 1,
+                           try_count = try_count + 1,
                            status = 'active',
                            start_time = ${curTime},
                            end_time = NULL
                            WHERE
-                           id IN (${idset})
-                    """
+                           id IN #${idset}
+                    """.asUpdate
                     } else {
-                      DBIO.successful(true)
+                      DBIO.successful(1)
                     }
                   }
                 } yield res
@@ -106,14 +105,16 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
           logger.debug("fail task")
           val typedTODO = withTaskType[FailTask](_.isInstanceOf[FailTask])
           val tasks = typedTODO.map(_._1)
+          val curTime = System.nanoTime()
           val futureRes = db.run {
             DBIO.seq(
               tasks.map {
                 case FailTask(id, log) =>
                   sqlu"""
                      UPDATE task SET
-                     status = CASE WHEN tryCount >= tryLimit AND status != 'success' THEN 'fail' ELSE 'pending' END,
-                     end_time = ${System.nanoTime()},
+                     status = CASE WHEN try_count >= try_limit AND status != 'success' THEN 'fail' ELSE 'pending' END,
+                     end_time = ${curTime},
+                     pending_time = CASE WHEN try_count >= try_limit AND status != 'success' THEN pending_time ELSE ${curTime} END,
                      log = ${log}
                      WHERE id = ${id}
                 """
@@ -130,12 +131,12 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
           logger.debug("succeed task")
           val typedTODO = withTaskType[SucceedTask](_.isInstanceOf[SucceedTask])
           val ids = typedTODO.map(_._1.id)
-          val idsS = ids.mkString(", ")
+          val idsS = ids.mkString("(", ", ", ")")
           val futureRes = db.run {
-            sqlu"""
-                   UPDATE task SET status = 'success', end_time = ${System.nanoTime()}
-                   WHERE id IN (${idsS})
-              """
+            sql"""
+                   UPDATE task SET status = 'success', end_time = ${System.nanoTime()}, log = ''
+                   WHERE id IN #${idsS}
+              """.asUpdate
           }
           futureRes.onComplete {
             case Success(_) => typedTODO.foreach(_._2.complete(Success(true)))
@@ -147,13 +148,14 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
           logger.debug("add task")
           val typedTODO = withTaskType[AddTask](_.isInstanceOf[AddTask])
           val tasks = typedTODO.map(_._1.task)
+          assert(tasks.map(_.id).toSet.size == tasks.size)
           val futureRes = db.run {
             DBIO.seq(
               tasks.map {
                 t =>
                   sqlu"""
-                         INSERT OR IGNORE INTO task("id", "pool", "type", "key", "options", "status", "tryCount", "tryLimit", "timeout", "log")
-                         VALUES(${t.id}, ${t.pool}, ${t.`type`}, ${t.key}, ${t.options}, ${t.status}, ${t.tryCount}, ${t.tryLimit}, ${t.timeout}, ${t.log})
+                         INSERT OR IGNORE INTO task("id", "pool", "type", "key", "options", "status", "pending_time", "try_count", "try_limit", "timeout", "log")
+                         VALUES(${t.id}, ${t.pool}, ${t.`type`}, ${t.key}, ${t.options}, ${t.status}, ${t.pendingTime}, ${t.tryCount}, ${t.tryLimit}, ${t.timeout}, ${t.log})
                     """
               }: _*
             ).transactionally
@@ -192,7 +194,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
 
   override def receive: Receive = {
     case t: TaskCtrl => {
-      logger.debug(s"TASK: $t")
+//      logger.debug(s"TASK: $t")
       val dst = sender()
       val p = Promise[Any]()
       p.future.onComplete(dst ! _)

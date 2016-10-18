@@ -22,12 +22,20 @@ case class AddTask(
                        timeout: Long
                      ) extends TaskCtrl {
   lazy val task = {
-    val id = System.nanoTime()
-    Task(id, pool, `type`, key, id, options, Task.Status.Pending, tryLimit = tryLimit, timeout = timeout)
+    val curTime = AddTask.getIdTime
+    Task(curTime, pool, `type`, key, curTime, options, Task.Status.Pending, pendingTime = curTime, tryLimit = tryLimit, timeout = timeout)
   }
 }
 
 object AddTask {
+  var prevTime = System.nanoTime()
+
+  def getIdTime = {
+    while(System.nanoTime() == prevTime) {}
+    prevTime = System.nanoTime()
+    prevTime
+  }
+
   implicit val fmt = Json.format[AddTask]
 }
 
