@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 
-import json
-import time
-import logging
-import inspect
-import functools
-import concurrent
-import aiohttp
 import asyncio
+import concurrent.futures
+import functools
+import inspect
+import json
+import logging
 import traceback
+
+import aiohttp
 import async_timeout
 import yaml
 
@@ -27,6 +27,7 @@ class TaskExecutor(object):
         self.task_timeout = config["task_timeout"]
         self.num_worker = config["num_worker"]
         self.exit_when_done = config["exit_when_done"]
+        self.terminate_flag = False
 
     @staticmethod
     def load(config_file, loop=None):
@@ -37,6 +38,7 @@ class TaskExecutor(object):
         def wrapper(f):
             self.task_mapping[type] = f
             return f
+
         return wrapper
 
     def terminate(self):
@@ -50,10 +52,10 @@ class TaskExecutor(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.session.__exit__(exc_type, exc_val, exc_tb)
-        self.executor.__exit__(ext_type, exc_val, exc_tb)
+        self.executor.__exit__(exc_type, exc_val, exc_tb)
 
     async def run(self):
-        await asyncio.gather(*[texec.worker(i) for i in range(self.num_worker)])
+        await asyncio.gather(*[self.worker(i) for i in range(self.num_worker)])
 
     async def get(self, url):
         with async_timeout.timeout(self.request_timeout):
@@ -82,31 +84,31 @@ class TaskExecutor(object):
             "pool": self.pool,
             "limit": 1
         }
-        return await post_json("%s/task/start" % self.server_url, obj)
+        return await self.post_json("/task/start", obj)
 
-    async def task_delete(self, id):
+    async def task_delete(self, task_id):
         obj = {
-            "id": id
+            "id": task_id
         }
-        return await post_json("%s/task/delete" % self.server_url, obj)
+        return await self.post_json("/task/delete", obj)
 
-    async def task_success(self, id):
+    async def task_success(self, task_id):
         obj = {
-            "id": id
+            "id": task_id
         }
-        return await post_json("%s/task/success" % base_url, obj)
+        return await self.post_json("/task/success", obj)
 
-    async def task_fail(self, id, log):
+    async def task_fail(self, task_id, log):
         obj = {
-            "id": id,
+            "id": task_id,
             "log": log
         }
-        return await post_json("%s/task/fail" % base_url, obj)
+        return await self.post_json("/task/fail", obj)
 
     async def worker(self, i):
         logging.info("worker(%d) started" % i)
         while True:
-            tasks = json.loads(await task_fetch())
+            tasks = json.loads(await self.task_fetch())
             if self.terminate_flag:
                 return
             if len(tasks) == 0:
@@ -117,8 +119,8 @@ class TaskExecutor(object):
                     logging.info("task all done, waiting")
                     await asyncio.sleep(5)
             for t in tasks:
-                if t["type"] in task_mapping:
-                    f = task_mapping[t["type"]]
+                if t["type"] in self.task_mapping:
+                    f = self.task_mapping[t["type"]]
                     opts = json.loads(t["options"])
                     try:
                         fut = self.loop.run_in_executor(self.executor,
@@ -127,11 +129,11 @@ class TaskExecutor(object):
                         if inspect.isawaitable(v):
                             res = await v
                             logging.debug("res: %s" % res)
-                        await task_success(t["id"])
+                        await self.task_success(t["id"])
                     except Exception as e:
                         err_trace = traceback.format_exc()
                         logging.error(err_trace)
-                        await task_fail(t["id"], err_trace)
+                        await self.task_fail(t["id"], err_trace)
                 else:
                     logging.warning("Unknown task type: %s" % repr(t))
-                    await task_fail(t["id"], traceback.format_exc())
+                    await self.task_fail(t["id"], traceback.format_exc())
