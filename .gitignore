@@ -1,6 +1,10 @@
 *.class
 *.log
 
+# python
+__pycache__
+*.pyc
+
 # sbt specific
 .cache
 .history
@@ -18,6 +22,7 @@ project/plugins/project/
 
 # IDEA-IDE specific
 .idea
+*.iml
 
 # db
 db/*.db
