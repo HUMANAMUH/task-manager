@@ -11,6 +11,9 @@ POST         /task/delete         controllers.TaskController.delete
 POST         /task/success        controllers.TaskController.success
 POST         /task/fail           controllers.TaskController.fail
 POST         /task/create         controllers.TaskController.create
+POST         /task/block          controllers.TaskController.block
+POST         /task/recover        controllers.TaskController.recoverTask
+POST         /pool/recover        controllers.TaskController.recoverPool
 
 # Map static resources from the /public folder to the /assets URL path
 GET          /assets/*file        controllers.Assets.versioned(path="/public", file: Asset)

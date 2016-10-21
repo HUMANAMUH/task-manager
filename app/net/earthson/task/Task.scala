@@ -25,7 +25,7 @@ case class Task(
                  createTime: Long,
                  options: String,
                  status: String,
-                 pendingTime: Long,
+                 scheduledTime: Long,
                  startTime: Option[Long] = None,
                  endTime: Option[Long] = None,
                  tryCount: Int = 0,

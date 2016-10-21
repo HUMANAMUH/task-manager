@@ -76,4 +76,10 @@ class TaskController @Inject()(actorSystem: ActorSystem)(implicit exec: Executio
   def fail = commonAction[FailTask, Boolean]
 
   def delete = commonAction[DeleteTask, Boolean]
+
+  def block = commonAction[BlockTask, Boolean]
+
+  def recoverTask = commonAction[RecoverTask, Boolean]
+
+  def recoverPool = commonAction[RecoverPool, Boolean]
 }

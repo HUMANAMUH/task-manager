@@ -78,10 +78,11 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                 {
                   for {
                     res <- TableTask.filter(_.pool === pool)
+                      .filter(_.scheduledTime <= curTime) //task could be delay
                       .filter(x => x.status === Task.Status.Pending || {
                         x.status === Task.Status.Active && (((LiteralColumn(curTime).bind - x.startTime.getOrElse(0L)) / LiteralColumn(1000000L).bind) > x.timeout)
                       })
-                      .sortBy(_.pendingTime)
+                      .sortBy(_.scheduledTime)
                       .take(size).result
                     _ <- {
                       val idset = res.map(_.id).mkString("(", ", ", ")")
@@ -124,12 +125,13 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
               db.run {
                 DBIO.seq(
                   ctrls.map {
-                    case FailTask(id, log) =>
+                    case FailTask(id, log, delay) =>
+                      val newPendingTime = curTime + delay.getOrElse(0L) * 1000000
                       sqlu"""
                      UPDATE task SET
                      status = CASE WHEN try_count >= try_limit AND status != 'success' THEN 'fail' ELSE 'pending' END,
                      end_time = ${curTime},
-                     pending_time = CASE WHEN try_count >= try_limit AND status != 'success' THEN pending_time ELSE ${curTime} END,
+                     scheduled_time = CASE WHEN try_count >= try_limit AND status != 'success' THEN scheduled_time ELSE ${newPendingTime} END,
                      log = ${log}
                      WHERE id = ${id}
                 """
@@ -159,8 +161,8 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                   tasks.map {
                     t =>
                       sqlu"""
-                         INSERT OR IGNORE INTO task("id", "pool", "type", "key", "options", "status", "pending_time", "try_count", "try_limit", "timeout", "log")
-                         VALUES(${t.id}, ${t.pool}, ${t.`type`}, ${t.key}, ${t.options}, ${t.status}, ${t.pendingTime}, ${t.tryCount}, ${t.tryLimit}, ${t.timeout}, ${t.log})
+                         INSERT OR IGNORE INTO task("id", "pool", "type", "key", "options", "status", "scheduled_time", "try_count", "try_limit", "timeout", "log")
+                         VALUES(${t.id}, ${t.pool}, ${t.`type`}, ${t.key}, ${t.options}, ${t.status}, ${t.scheduledTime}, ${t.tryCount}, ${t.tryLimit}, ${t.timeout}, ${t.log})
                     """
                   }: _*
                 ).transactionally
@@ -174,9 +176,12 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                 TableTask.filter(_.id inSet ids).delete
               }.map(_ => ctrls.map(_ => true))
           }
-        case _: BlockTask => {
+        case _: BlockTask =>
           logger.warn("Unsupported operation")
-        }
+        case _: RecoverTask =>
+          logger.warn("Unsupported operation")
+        case _: RecoverPool =>
+          logger.warn("Unsupported operation")
       }
     }
 

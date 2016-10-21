@@ -13,17 +13,29 @@ object FetchTask {
   implicit val fmt = Json.format[FetchTask]
 }
 
+/**
+  *
+  * @param pool
+  * @param `type`
+  * @param key
+  * @param options
+  * @param scheduledTime in milliseconds
+  * @param tryLimit
+  * @param timeout
+  */
 case class AddTask(
                        pool: String,
                        `type`: String,
                        key: String,
                        options: String,
+                       scheduledTime: Option[Long],
                        tryLimit: Int,
                        timeout: Long
                      ) extends TaskCtrl {
   lazy val task = {
     val curTime = AddTask.getIdTime
-    Task(curTime, pool, `type`, key, curTime, options, Task.Status.Pending, pendingTime = curTime, tryLimit = tryLimit, timeout = timeout)
+    val destTime = scheduledTime.map(_ * 1000000).getOrElse(curTime)
+    Task(curTime, pool, `type`, key, curTime, options, Task.Status.Pending, scheduledTime = destTime, tryLimit = tryLimit, timeout = timeout)
   }
 }
 
@@ -39,7 +51,13 @@ object AddTask {
   implicit val fmt = Json.format[AddTask]
 }
 
-case class FailTask(id: Long, log: String) extends TaskCtrl
+/***
+  *
+  * @param id
+  * @param log
+  * @param delay milliseconds to delay
+  */
+case class FailTask(id: Long, log: String, delay: Option[Long]) extends TaskCtrl
 
 object FailTask {
   implicit val fmt = Json.format[FailTask]
@@ -61,5 +79,21 @@ case class DeleteTask(id: Long) extends TaskCtrl
 
 object DeleteTask {
   implicit val fmt = Json.format[DeleteTask]
+}
+
+case class RecoverTask(id: Long) extends TaskCtrl
+
+object RecoverTask {
+  implicit val fmt = Json.format[RecoverTask]
+}
+
+/**
+  *
+  * @param pool
+  */
+case class RecoverPool(pool: String) extends TaskCtrl
+
+object RecoverPool {
+  implicit val fmt = Json.format[RecoverPool]
 }
 

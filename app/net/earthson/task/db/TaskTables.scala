@@ -22,7 +22,7 @@ trait TaskTables {
 
     def key = column[String]("key")
 
-    def pendingTime = column[Long]("pending_time")
+    def scheduledTime = column[Long]("scheduled_time")
 
     def startTime = column[Option[Long]]("start_time")
 
@@ -42,7 +42,7 @@ trait TaskTables {
 
     def idx1 = index("idx_query", (pool, `type`, key), unique = true)
 
-    def idx2 = index("idx_status", (status, pendingTime))
+    def idx2 = index("idx_status", (status, scheduledTime))
 
     def * =
       (
@@ -53,7 +53,7 @@ trait TaskTables {
         id,
         options,
         status,
-        pendingTime,
+        scheduledTime,
         startTime,
         endTime,
         tryCount,
