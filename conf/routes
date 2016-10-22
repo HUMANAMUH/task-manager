@@ -3,17 +3,18 @@
 # ~~~~
 
 # An example controller showing a sample home page
-GET          /                    controllers.HomeController.index
+GET         /                    controllers.HomeController.index
 # An example controller showing how to use dependency injection
 # An example controller showing how to write asynchronous code
-POST         /task/start          controllers.TaskController.start
-POST         /task/delete         controllers.TaskController.delete
-POST         /task/success        controllers.TaskController.success
-POST         /task/fail           controllers.TaskController.fail
-POST         /task/create         controllers.TaskController.create
-POST         /task/block          controllers.TaskController.block
-POST         /task/recover        controllers.TaskController.recoverTask
-POST         /pool/recover        controllers.TaskController.recoverPool
+POST        /task/start          controllers.TaskController.start
+POST        /task/delete         controllers.TaskController.delete
+POST        /task/success        controllers.TaskController.success
+POST        /task/fail           controllers.TaskController.fail
+POST        /task/create         controllers.TaskController.create
+POST        /task/block          controllers.TaskController.block
+POST        /task/unblock        controllers.TaskController.unblock
+POST        /task/recover        controllers.TaskController.recoverTask
+POST        /pool/recover        controllers.TaskController.recoverPool
 
 # Map static resources from the /public folder to the /assets URL path
-GET          /assets/*file        controllers.Assets.versioned(path="/public", file: Asset)
+GET         /assets/*file        controllers.Assets.versioned(path="/public", file: Asset)

@@ -13,9 +13,7 @@ import scala.reflect.ClassTag
 import scala.util._
 
 object Manager {
-
   case object JobComplete
-
 }
 
 class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvider)
@@ -177,27 +175,69 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
               }.map(_ => ctrls.map(_ => true))
           }
         case _: BlockTask =>
-          logger.warn("Unsupported operation")
+          bulkOp[BlockTask]() {
+            ctrls =>
+              val ids = ctrls.map(_.id)
+              db.run {
+                TableTask
+                  .filter(_.id inSet ids)
+                  .filter(_.status === Task.Status.Pending)
+                  .map(_.status)
+                  .update(Task.Status.Block)
+              }.map(_ => ctrls.map(_ => true))
+          }
+        case _: UnblockTask =>
+          bulkOp[UnblockTask]() {
+            ctrls =>
+              val ids = ctrls.map(_.id)
+              db.run {
+                TableTask
+                  .filter(_.id inSet ids)
+                  .filter(_.status === Task.Status.Block)
+                  .map(_.status)
+                  .update(Task.Status.Pending)
+              }.map(_ => ctrls.map(_ => true))
+          }
         case _: RecoverTask =>
-          logger.warn("Unsupported operation")
+          //recover failed task
+          bulkOp[RecoverTask]() {
+            ctrls =>
+              val ids = ctrls.map(_.id)
+              db.run {
+                TableTask
+                  .filter(_.id inSet ids)
+                  .filter(_.status === Task.Status.Failed)
+                  .map(t => (t.status, t.tryCount))
+                  .update((Task.Status.Pending, 0))
+              }.map(_ => ctrls.map(_ => true))
+          }
         case _: RecoverPool =>
-          logger.warn("Unsupported operation")
+          //recover failed task
+          bulkOp[RecoverPool]() {
+            ctrls =>
+              val pools = ctrls.map(_.pool).toSet
+              db.run {
+                TableTask
+                  .filter(_.pool inSet pools)
+                  .filter(_.status === Task.Status.Failed)
+                  .map(t => (t.status, t.tryCount))
+                  .update((Task.Status.Pending, 0))
+              }.map(_ => ctrls.map(_ => true))
+          }
       }
     }
 
   override def receive: Receive = {
-    case t: TaskCtrl => {
+    case t: TaskCtrl =>
       //      logger.debug(s"TASK: $t")
       val dst = sender()
       val p = Promise[Any]()
       p.future.onComplete(dst ! _)
       buffer.append(t -> p)
       tryDoJob()
-    }
-    case JobComplete => {
+    case JobComplete =>
       lock = false
       tryDoJob()
-    }
   }
 }
 

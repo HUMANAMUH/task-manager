@@ -87,6 +87,12 @@ object RecoverTask {
   implicit val fmt = Json.format[RecoverTask]
 }
 
+case class UnblockTask(id: Long) extends TaskCtrl
+
+object UnblockTask {
+  implicit val fmt = Json.format[UnblockTask]
+}
+
 /**
   *
   * @param pool

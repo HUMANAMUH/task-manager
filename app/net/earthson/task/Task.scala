@@ -43,7 +43,7 @@ object Task {
     val Active = "active"
     val Success = "success"
     val Failed = "fail"
-    val block = "block"
+    val Block = "block"
   }
 
 
