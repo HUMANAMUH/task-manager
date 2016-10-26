@@ -13,7 +13,9 @@ import scala.reflect.ClassTag
 import scala.util._
 
 object Manager {
+
   case object JobComplete
+
 }
 
 class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvider)
@@ -24,16 +26,15 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
   import Manager._
   import driver.api._
 
-  var lock  : Boolean                               = false
-  var buffer: ArrayBuffer[(TaskCtrl, Promise[Any])] = new collection.mutable.ArrayBuffer[(TaskCtrl, Promise[Any])]()
+  var lock: Boolean = false
+  val buffer: TQueue[(TaskCtrl, Promise[Any])] = new TQueue[(TaskCtrl, Promise[Any])]()
 
   implicit val execContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(32))
 
   def withTaskType[T <: TaskCtrl : ClassTag](cond: TaskCtrl => Boolean): Seq[(T, Promise[Any])] = {
-    val (todo, newBuffer) = buffer.partition {
+    val todo = buffer.dequeueBulk {
       case (c, p) => cond(c)
     }
-    buffer = newBuffer
     todo.map(x => (x._1.asInstanceOf[T], x._2))
   }
 
@@ -41,7 +42,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
     val todo = withTaskType[T] {
       case v: T => testF(v)
       case _ => false
-   }
+    }
     val ctrls = todo.map(_._1)
     val promises = todo.map(_._2)
     val futureRes = opF(ctrls)
@@ -51,13 +52,32 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
     futureRes.onComplete {
       case Success(vs) =>
         (vs zip promises).foreach {
-          case (v, p) => p.complete(Success(v))
+          case (v, p) => p.success(v)
         }
       case Failure(e) =>
         logger.error("Operations Fail", e)
         promises.foreach {
           _.failure(e)
         }
+    }
+  }
+
+  def headOp[T <: TaskCtrl : ClassTag](opF: T => Future[Any]): Unit = {
+    buffer.dequeue() match {
+      case Some((ctrl: T, promise)) =>
+        val futureRes = opF(ctrl)
+        futureRes.onComplete {
+          _ => self ! JobComplete
+        }
+        futureRes.onComplete {
+          case Success(vs) =>
+            promise.success(vs)
+          case Failure(e) =>
+            logger.error("Operations Fail", e)
+            promise.failure(e)
+        }
+      case _ =>
+        logger.warn("Unexpected code here")
     }
   }
 
@@ -78,8 +98,8 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                     res <- TableTask.filter(_.pool === pool)
                       .filter(_.scheduledTime <= curTime) //task could be delay
                       .filter(x => x.status === Task.Status.Pending || {
-                        x.status === Task.Status.Active && (((LiteralColumn(curTime).bind - x.startTime.getOrElse(0L)) / LiteralColumn(1000000L).bind) > x.timeout)
-                      })
+                      x.status === Task.Status.Active && (((LiteralColumn(curTime).bind - x.startTime.getOrElse(0L)) / LiteralColumn(1000000L).bind) > x.timeout)
+                    })
                       .sortBy(_.scheduledTime)
                       .take(size).result
                     _ <- {
@@ -224,6 +244,18 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                   .update((Task.Status.Pending, 0))
               }.map(_ => ctrls.map(_ => true))
           }
+        case _: GetLastTask =>
+          headOp[GetLastTask] {
+            case GetLastTask(pool, tp) =>
+              db.run {
+                TableTask
+                  .filter(_.pool === pool)
+                  .filter(_.`type` === tp)
+                  .sortBy(_.scheduledTime)
+                  .take(1)
+                  .result
+              }.map(_.headOption)
+          }
       }
     }
 
@@ -233,7 +265,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
       val dst = sender()
       val p = Promise[Any]()
       p.future.onComplete(dst ! _)
-      buffer.append(t -> p)
+      buffer.enqueue(t -> p)
       tryDoJob()
     case JobComplete =>
       lock = false

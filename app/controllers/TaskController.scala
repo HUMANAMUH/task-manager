@@ -83,5 +83,7 @@ class TaskController @Inject()(actorSystem: ActorSystem)(implicit exec: Executio
 
   def recoverTask = commonAction[RecoverTask, Boolean]
 
+  def lastTask = commonAction[GetLastTask, Option[Task]]
+
   def recoverPool = commonAction[RecoverPool, Boolean]
 }

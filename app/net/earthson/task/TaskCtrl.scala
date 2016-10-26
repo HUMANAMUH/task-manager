@@ -103,3 +103,9 @@ object RecoverPool {
   implicit val fmt = Json.format[RecoverPool]
 }
 
+
+case class GetLastTask(pool: String, `type`: String) extends TaskCtrl
+
+object GetLastTask {
+  implicit val fmt = Json.format[GetLastTask]
+}
