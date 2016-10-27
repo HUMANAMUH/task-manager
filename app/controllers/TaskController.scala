@@ -48,7 +48,12 @@ class TaskController @Inject()(actorSystem: ActorSystem)(implicit exec: Executio
       request.body.validate[T] match {
         case JsSuccess(obj, _) => {
           (taskManager ? obj).mapTo[Try[R]].flatMap(try2future)
-            .map(res => Ok(Json.toJson(res)))
+            .map{
+              res =>
+                val j = Json.toJson(res)
+                logger.debug(Json.prettyPrint(j))
+                Ok(j)
+            }
             .recover {
               case e: Exception => {
                 logger.error("Server Error", e)
@@ -86,4 +91,6 @@ class TaskController @Inject()(actorSystem: ActorSystem)(implicit exec: Executio
   def lastTask = commonAction[GetLastTask, Option[Task]]
 
   def recoverPool = commonAction[RecoverPool, Boolean]
+
+  def lastGroupTask = commonAction[GetLastGroupTask, Option[Task]]
 }

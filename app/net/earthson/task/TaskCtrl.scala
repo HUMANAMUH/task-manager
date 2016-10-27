@@ -19,7 +19,7 @@ object FetchTask {
   * @param `type`
   * @param key
   * @param options
-  * @param scheduledTime in milliseconds
+  * @param scheduledAt in milliseconds
   * @param tryLimit
   * @param timeout
   */
@@ -27,15 +27,16 @@ case class AddTask(
                        pool: String,
                        `type`: String,
                        key: String,
+                       group: Option[String],
                        options: String,
-                       scheduledTime: Option[Long],
+                       scheduledAt: Option[Long],
                        tryLimit: Int,
                        timeout: Long
                      ) extends TaskCtrl {
   lazy val task = {
     val curTime = AddTask.getIdTime
-    val destTime = scheduledTime.map(_ * 1000000).getOrElse(curTime)
-    Task(curTime, pool, `type`, key, curTime, options, Task.Status.Pending, scheduledTime = destTime, tryLimit = tryLimit, timeout = timeout)
+    val destTime = scheduledAt.map(_ * 1000000).getOrElse(curTime)
+    Task(curTime, pool, `type`, key, group, curTime, options, Task.Status.Pending, scheduledAt = destTime, scheduledTime = destTime, tryLimit = tryLimit, timeout = timeout)
   }
 }
 
@@ -108,4 +109,10 @@ case class GetLastTask(pool: String, `type`: String) extends TaskCtrl
 
 object GetLastTask {
   implicit val fmt = Json.format[GetLastTask]
+}
+
+case class GetLastGroupTask(pool: String, group: Option[String]) extends TaskCtrl
+
+object GetLastGroupTask {
+  implicit val fmt = Json.format[GetLastGroupTask]
 }

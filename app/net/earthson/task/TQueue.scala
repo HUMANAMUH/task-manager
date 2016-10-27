@@ -71,6 +71,7 @@ class TQueue[T] {
     do_base_act()
     cache_to_base()
     do_base_act()
+    cache = newCache
     res
   }
 }

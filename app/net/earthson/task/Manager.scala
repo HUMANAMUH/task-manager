@@ -132,6 +132,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                       resBuff(cur) = t :: resBuff(cur)
                     }
                   }
+                  logger.debug(s"${ctrls.length} - ${resBuff.size}")
                   resBuff
                 }
               }
@@ -179,8 +180,8 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                   tasks.map {
                     t =>
                       sqlu"""
-                         INSERT OR IGNORE INTO task("id", "pool", "type", "key", "options", "status", "scheduled_time", "try_count", "try_limit", "timeout", "log")
-                         VALUES(${t.id}, ${t.pool}, ${t.`type`}, ${t.key}, ${t.options}, ${t.status}, ${t.scheduledTime}, ${t.tryCount}, ${t.tryLimit}, ${t.timeout}, ${t.log})
+                         INSERT OR IGNORE INTO task("id", "pool", "type", "key", "group", "options", "status", "scheduled_at", "scheduled_time", "try_count", "try_limit", "timeout", "log")
+                         VALUES(${t.id}, ${t.pool}, ${t.`type`}, ${t.key}, ${t.group}, ${t.options}, ${t.status}, ${t.scheduledAt}, ${t.scheduledTime}, ${t.tryCount}, ${t.tryLimit}, ${t.timeout}, ${t.log})
                     """
                   }: _*
                 ).transactionally
@@ -251,7 +252,19 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                 TableTask
                   .filter(_.pool === pool)
                   .filter(_.`type` === tp)
-                  .sortBy(_.scheduledTime)
+                  .sortBy(_.scheduledAt)
+                  .take(1)
+                  .result
+              }.map(_.headOption)
+          }
+        case _: GetLastGroupTask =>
+          headOp[GetLastGroupTask] {
+            case GetLastGroupTask(pool, group) =>
+              db.run {
+                TableTask
+                  .filter(_.pool === pool)
+                  .filter(_.group === group)
+                  .sortBy(_.scheduledAt)
                   .take(1)
                   .result
               }.map(_.headOption)

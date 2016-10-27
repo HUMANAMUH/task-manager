@@ -22,6 +22,10 @@ trait TaskTables {
 
     def key = column[String]("key")
 
+    def group = column[Option[String]]("group")
+
+    def scheduledAt = column[Long]("scheduled_at")
+
     def scheduledTime = column[Long]("scheduled_time")
 
     def startTime = column[Option[Long]]("start_time")
@@ -44,15 +48,19 @@ trait TaskTables {
 
     def idx2 = index("idx_status", (status, scheduledTime))
 
+    def idx3 = index("idx_group", group)
+
     def * =
       (
         id,
         pool,
         `type`,
         key,
+        group,
         id,
         options,
         status,
+        scheduledAt,
         scheduledTime,
         startTime,
         endTime,

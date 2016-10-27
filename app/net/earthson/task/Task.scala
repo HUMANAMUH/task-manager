@@ -8,6 +8,8 @@ import play.api.libs.json.Json
   * @param `type` task type for worker to process
   * @param key task key to find this task
   * @param createTime timestamp for creation
+  * @param scheduledAt timestamp for init schedule
+  * @param scheduledTime timestamp for actual schedule
   * @param startTime timestamp start. will be rewrite for each process
   * @param endTime timestamp end
   * @param options task parameters and so on
@@ -22,9 +24,11 @@ case class Task(
                  pool: String,
                  `type`: String,
                  key: String,
+                 group: Option[String],
                  createTime: Long,
                  options: String,
                  status: String,
+                 scheduledAt: Long,
                  scheduledTime: Long,
                  startTime: Option[Long] = None,
                  endTime: Option[Long] = None,
