@@ -35,7 +35,7 @@ case class AddTask(
                      ) extends TaskCtrl {
   lazy val task = {
     val curTime = AddTask.getIdTime
-    val destTime = scheduledAt.map(_ * 1000000000L).getOrElse(curTime)
+    val destTime = scheduledAt.getOrElse(curTime)
     Task(curTime, pool, `type`, key, group, curTime, options, Task.Status.Pending, scheduledAt = destTime, scheduledTime = destTime, tryLimit = tryLimit, timeout = timeout)
   }
 }
