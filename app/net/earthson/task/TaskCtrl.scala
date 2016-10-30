@@ -19,9 +19,9 @@ object FetchTask {
   * @param `type`
   * @param key
   * @param options
-  * @param scheduledAt in milliseconds
+  * @param scheduledAt in ms
   * @param tryLimit
-  * @param timeout
+  * @param timeout in seconds
   */
 case class AddTask(
                        pool: String,
@@ -34,9 +34,10 @@ case class AddTask(
                        timeout: Long
                      ) extends TaskCtrl {
   lazy val task = {
-    val curTime = AddTask.getIdTime
+    val id = AddTask.getIdTime
+    val curTime = System.currentTimeMillis()
     val destTime = scheduledAt.getOrElse(curTime)
-    Task(curTime, pool, `type`, key, group, curTime, options, Task.Status.Pending, scheduledAt = destTime, scheduledTime = destTime, tryLimit = tryLimit, timeout = timeout)
+    Task(id, pool, `type`, key, group, curTime, options, Task.Status.Pending, scheduledAt = destTime, scheduledTime = destTime, tryLimit = tryLimit, timeout = timeout)
   }
 }
 

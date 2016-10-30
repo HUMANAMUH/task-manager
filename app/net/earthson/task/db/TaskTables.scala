@@ -24,6 +24,8 @@ trait TaskTables {
 
     def group = column[Option[String]]("group")
 
+    def createTime = column[Long]("create_time")
+
     def scheduledAt = column[Long]("scheduled_at")
 
     def scheduledTime = column[Long]("scheduled_time")
@@ -57,7 +59,7 @@ trait TaskTables {
         `type`,
         key,
         group,
-        id,
+        createTime,
         options,
         status,
         scheduledAt,

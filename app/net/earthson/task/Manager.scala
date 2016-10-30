@@ -91,14 +91,14 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
           bulkOp[FetchTask](_.pool == pool) {
             ctrls =>
               val size = ctrls.map(_.limit).sum
-              val curTime = System.nanoTime()
+              val curTime = System.currentTimeMillis()
               db.run {
                 {
                   for {
                     res <- TableTask.filter(_.pool === pool)
                       .filter(_.scheduledTime <= curTime) //task could be delay
                       .filter(x => x.status === Task.Status.Pending || {
-                      x.status === Task.Status.Active && (((LiteralColumn(curTime).bind - x.startTime.getOrElse(0L)) / LiteralColumn(1000000L).bind) > x.timeout)
+                      x.status === Task.Status.Active && (((LiteralColumn(curTime).bind - x.startTime.getOrElse(0L)) / LiteralColumn(1000L).bind) > x.timeout)
                     })
                       .sortBy(_.scheduledTime)
                       .take(size).result
@@ -140,12 +140,12 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
         case _: FailTask =>
           bulkOp[FailTask]() {
             ctrls =>
-              val curTime = System.nanoTime()
+              val curTime = System.currentTimeMillis()
               db.run {
                 DBIO.seq(
                   ctrls.map {
                     case FailTask(id, log, delay) =>
-                      val newPendingTime = curTime + delay.getOrElse(0L) * 1000000
+                      val newPendingTime = curTime + delay.getOrElse(0L)
                       sqlu"""
                      UPDATE task SET
                      status = CASE WHEN try_count >= try_limit AND status != 'success' THEN 'fail' ELSE 'pending' END,
@@ -165,7 +165,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
               val idsS = ids.mkString("(", ", ", ")")
               db.run {
                 sql"""
-                   UPDATE task SET status = 'success', end_time = ${System.nanoTime()}, log = ''
+                   UPDATE task SET status = 'success', end_time = ${System.currentTimeMillis()}, log = ''
                    WHERE id IN #${idsS}
               """.asUpdate
               }.map(_ => ctrls.map(_ => true))
@@ -180,8 +180,8 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                   tasks.map {
                     t =>
                       sqlu"""
-                         INSERT OR IGNORE INTO task("id", "pool", "type", "key", "group", "options", "status", "scheduled_at", "scheduled_time", "try_count", "try_limit", "timeout", "log")
-                         VALUES(${t.id}, ${t.pool}, ${t.`type`}, ${t.key}, ${t.group}, ${t.options}, ${t.status}, ${t.scheduledAt}, ${t.scheduledTime}, ${t.tryCount}, ${t.tryLimit}, ${t.timeout}, ${t.log})
+                         INSERT OR IGNORE INTO task("id", "pool", "type", "key", "group", "create_time", "options", "status", "scheduled_at", "scheduled_time", "try_count", "try_limit", "timeout", "log")
+                         VALUES(${t.id}, ${t.pool}, ${t.`type`}, ${t.key}, ${t.group}, ${t.createTime}, ${t.options}, ${t.status}, ${t.scheduledAt}, ${t.scheduledTime}, ${t.tryCount}, ${t.tryLimit}, ${t.timeout}, ${t.log})
                     """
                   }: _*
                 ).transactionally
