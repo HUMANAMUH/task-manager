@@ -98,7 +98,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                     res <- TableTask.filter(_.pool === pool)
                       .filter(_.scheduledTime <= curTime) //task could be delay
                       .filter(x => x.status === Task.Status.Pending || {
-                      x.status === Task.Status.Active && (((LiteralColumn(curTime).bind - x.startTime.getOrElse(0L)) / LiteralColumn(1000L).bind) > x.timeout)
+                      x.status === Task.Status.Active && x.startTime < LiteralColumn(curTime).bind - (x.timeout * 1000L)
                     })
                       .sortBy(_.scheduledTime)
                       .take(size).result

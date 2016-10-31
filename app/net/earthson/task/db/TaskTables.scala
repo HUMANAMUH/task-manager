@@ -52,6 +52,8 @@ trait TaskTables {
 
     def idx3 = index("idx_group", group)
 
+    def idx4 = index("idx_start_time", startTime)
+
     def * =
       (
         id,
