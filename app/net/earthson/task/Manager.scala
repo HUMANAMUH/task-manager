@@ -7,7 +7,7 @@ import com.typesafe.scalalogging.LazyLogging
 import net.earthson.task.db.TaskDB
 import play.api.db.slick.DatabaseConfigProvider
 
-import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.reflect.ClassTag
 import scala.util._
@@ -16,6 +16,7 @@ object Manager {
 
   case object JobComplete
 
+  case object TimeoutCleaned
 }
 
 class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvider)
@@ -30,6 +31,10 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
   val buffer: TQueue[(TaskCtrl, Promise[Any])] = new TQueue[(TaskCtrl, Promise[Any])]()
 
   implicit val execContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(32))
+
+  context.system.scheduler.schedule(2 seconds, 1 seconds) {
+    self ! DoTaskTimeout
+  }
 
   def withTaskType[T <: TaskCtrl : ClassTag](cond: TaskCtrl => Boolean): Seq[(T, Promise[Any])] = {
     val todo = buffer.dequeueBulk {
@@ -97,9 +102,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                   for {
                     res <- TableTask.filter(_.pool === pool)
                       .filter(_.scheduledTime <= curTime) //task could be delay
-                      .filter(x => x.status === Task.Status.Pending || {
-                      x.status === Task.Status.Active && x.startTime < LiteralColumn(curTime).bind - (x.timeout * 1000L)
-                    })
+                      .filter(_.status === Task.Status.Pending)
                       .sortBy(_.scheduledTime)
                       .take(size).result
                     _ <- {
@@ -112,7 +115,8 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                            try_count = try_count + 1,
                            status = 'active',
                            start_time = ${curTime},
-                           end_time = NULL
+                           end_time = NULL,
+                           timeout_at = ${curTime} + timeout * 1000
                            WHERE
                            id IN #${idset}
                     """.asUpdate
@@ -150,6 +154,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                      UPDATE task SET
                      status = CASE WHEN try_count >= try_limit AND status != 'success' THEN 'fail' ELSE 'pending' END,
                      end_time = ${curTime},
+                     timeout_at = NULL,
                      scheduled_time = CASE WHEN try_count >= try_limit AND status != 'success' THEN scheduled_time ELSE ${newPendingTime} END,
                      log = ${log}
                      WHERE id = ${id}
@@ -165,7 +170,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
               val idsS = ids.mkString("(", ", ", ")")
               db.run {
                 sql"""
-                   UPDATE task SET status = 'success', end_time = ${System.currentTimeMillis()}, log = ''
+                   UPDATE task SET status = 'success', end_time = ${System.currentTimeMillis()}, log = '', timeout_at = NULL
                    WHERE id IN #${idsS}
               """.asUpdate
               }.map(_ => ctrls.map(_ => true))
@@ -180,8 +185,40 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                   tasks.map {
                     t =>
                       sqlu"""
-                         INSERT OR IGNORE INTO task("id", "pool", "type", "key", "group", "create_time", "options", "status", "scheduled_at", "scheduled_time", "try_count", "try_limit", "timeout", "log")
-                         VALUES(${t.id}, ${t.pool}, ${t.`type`}, ${t.key}, ${t.group}, ${t.createTime}, ${t.options}, ${t.status}, ${t.scheduledAt}, ${t.scheduledTime}, ${t.tryCount}, ${t.tryLimit}, ${t.timeout}, ${t.log})
+                         INSERT OR IGNORE INTO
+                         task(
+                         "id",
+                         "pool",
+                         "type",
+                         "key",
+                         "group",
+                         "create_time",
+                         "options",
+                         "status",
+                         "scheduled_at",
+                         "scheduled_time",
+                         "try_count",
+                         "try_limit",
+                         "timeout",
+                         "log",
+                         "timeout_at"
+                         ) VALUES (
+                        ${t.id},
+                        ${t.pool},
+                        ${t.`type`},
+                        ${t.key},
+                        ${t.group},
+                        ${t.createTime},
+                        ${t.options},
+                        ${t.status},
+                        ${t.scheduledAt},
+                        ${t.scheduledTime},
+                        ${t.tryCount},
+                        ${t.tryLimit},
+                        ${t.timeout},
+                        ${t.log},
+                        ${t.timeoutAt}
+                        )
                     """
                   }: _*
                 ).transactionally
@@ -269,6 +306,23 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                   .result
               }.map(_.headOption)
           }
+        case DoTaskTimeout =>
+          bulkOp[DoTaskTimeout.type]() {
+            ctrls => {
+              val curTime = System.currentTimeMillis()
+              db.run {
+                sql"""
+                      UPDATE task
+                      SET
+                      status = 'pending',
+                      start_time = NULL,
+                      timeout_at = NULL,
+                      scheduled_time = ${curTime}
+                      WHERE timeout_at < ${curTime}
+                  """.asUpdate
+              }.map(_ => ctrls.map(_ => TimeoutCleaned))
+            }
+          }
       }
     }
 
@@ -283,6 +337,8 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
     case JobComplete =>
       lock = false
       tryDoJob()
+    case TimeoutCleaned =>
+      logger.debug("Timeout Clearned")
   }
 }
 

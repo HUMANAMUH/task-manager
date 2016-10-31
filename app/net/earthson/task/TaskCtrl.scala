@@ -117,3 +117,5 @@ case class GetLastGroupTask(pool: String, group: Option[String]) extends TaskCtr
 object GetLastGroupTask {
   implicit val fmt = Json.format[GetLastGroupTask]
 }
+
+case object DoTaskTimeout extends TaskCtrl

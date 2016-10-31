@@ -35,7 +35,8 @@ case class Task(
                  tryCount: Int = 0,
                  tryLimit: Int = 5,
                  timeout: Long = 600,
-                 log: String = ""
+                 log: String = "",
+                 timeoutAt: Option[Long] = None
                ) {
 
 }

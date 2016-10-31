@@ -46,13 +46,13 @@ trait TaskTables {
 
     def log = column[String]("log")
 
+    def timeoutAt = column[Option[Long]]("timeout_at")
+
     def idx1 = index("idx_query", (pool, `type`, key), unique = true)
 
     def idx2 = index("idx_status", (status, scheduledTime))
 
     def idx3 = index("idx_group", group)
-
-    def idx4 = index("idx_start_time", startTime)
 
     def * =
       (
@@ -71,7 +71,8 @@ trait TaskTables {
         tryCount,
         tryLimit,
         timeout,
-        log
+        log,
+        timeoutAt
         ) <>
         ((Task.apply _).tupled, Task.unapply)
   }
