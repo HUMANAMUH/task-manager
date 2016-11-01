@@ -337,8 +337,10 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
     case JobComplete =>
       lock = false
       tryDoJob()
-    case TimeoutCleaned =>
+    case Success(TimeoutCleaned) =>
       logger.debug("Timeout Clearned")
+    case Failure(e) =>
+      logger.error("Error", e)
   }
 }
 

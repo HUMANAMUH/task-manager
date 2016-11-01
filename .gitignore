@@ -26,3 +26,4 @@ project/plugins/project/
 
 # db
 db/*.db
+db/*.db-journal
