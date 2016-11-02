@@ -6,6 +6,7 @@ import akka.actor.Actor
 import com.typesafe.scalalogging.LazyLogging
 import net.earthson.task.db.TaskDB
 import play.api.db.slick.DatabaseConfigProvider
+import slick.jdbc.GetResult
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, Promise}
@@ -31,6 +32,8 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
   val buffer: TQueue[(TaskCtrl, Promise[Any])] = new TQueue[(TaskCtrl, Promise[Any])]()
 
   implicit val execContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(32))
+
+  implicit val getTaskResult = GetResult(r => Task(r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<))
 
   context.system.scheduler.schedule(2 seconds, 1 seconds) {
     self ! DoTaskTimeout
@@ -282,29 +285,59 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
                   .update((Task.Status.Pending, 0))
               }.map(_ => ctrls.map(_ => true))
           }
-        case _: GetLastTask =>
-          headOp[GetLastTask] {
-            case GetLastTask(pool, tp) =>
+        case h: GetLastTask =>
+          bulkOp[GetLastTask] {
+            g => g.pool == h.pool
+          } {
+            ctrls =>
+              val types = ctrls.map(c => s"""'${c.`type`}'""").mkString("(", ", ", ")")
               db.run {
-                TableTask
-                  .filter(_.pool === pool)
-                  .filter(_.`type` === tp)
-                  .sortBy(_.scheduledAt)
-                  .take(1)
-                  .result
-              }.map(_.headOption)
+                sql"""
+                 SELECT task.*
+                 FROM task
+                 JOIN (
+                    SELECT pool, "type", MAX(scheduled_at) AS scheduled_at
+                    FROM task
+                    WHERE pool=${h.pool} AND "type" IN #${types}
+                    GROUP BY "type"
+                 ) t
+                 ON task.pool=t.pool AND task."type"=t."type" AND task.scheduled_at=t.scheduled_at
+                 """.as[Task]
+              }.map {
+                res => {
+                  val resMap = res.map {
+                    t => (t.`type`, t)
+                  }.toMap
+                  ctrls.map(c => resMap.get(c.`type`))
+                }
+              }
           }
-        case _: GetLastGroupTask =>
-          headOp[GetLastGroupTask] {
-            case GetLastGroupTask(pool, group) =>
+        case h: GetLastGroupTask =>
+          bulkOp[GetLastGroupTask] {
+            g => g.pool == h.pool
+          } {
+            ctrls =>
+              val groups = ctrls.map(c => c.group.map(s => s"""'$s'""").getOrElse("NULL")).mkString("(", ", ", ")")
               db.run {
-                TableTask
-                  .filter(_.pool === pool)
-                  .filter(_.group === group)
-                  .sortBy(_.scheduledAt)
-                  .take(1)
-                  .result
-              }.map(_.headOption)
+                sql"""
+                 SELECT task.*
+                 FROM task
+                 JOIN (
+                    SELECT pool, "group", MAX(scheduled_at) AS scheduled_at
+                    FROM task
+                    WHERE pool=${h.pool} AND "group" IN #${groups}
+                    GROUP BY "group"
+                 ) t
+                 ON task.pool=t.pool AND task."group"=t."group" AND task.scheduled_at=t.scheduled_at
+                 """.as[Task]
+              }.map {
+                res => {
+                  val resMap = res.map {
+                    t => (t.group, t)
+                  }.toMap
+                  ctrls.map(c => resMap.get(c.group))
+                }
+              }
           }
         case DoTaskTimeout =>
           bulkOp[DoTaskTimeout.type]() {

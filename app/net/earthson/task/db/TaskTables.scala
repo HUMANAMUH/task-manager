@@ -52,7 +52,9 @@ trait TaskTables {
 
     def idx2 = index("idx_status", (status, scheduledTime))
 
-    def idx3 = index("idx_group", group)
+    def idx3 = index("idx_group_sched", (pool, group, scheduledAt))
+
+    def idx4 = index("idx_type_sched", (pool, `type`, scheduledAt))
 
     def * =
       (
