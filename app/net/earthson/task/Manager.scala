@@ -31,7 +31,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
   var lock: Boolean = false
   val buffer: TQueue[(TaskCtrl, Promise[Any])] = new TQueue[(TaskCtrl, Promise[Any])]()
 
-  implicit val execContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(32))
+  implicit val execContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(8))
 
   implicit val getTaskResult = GetResult(r => Task(r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<))
 
