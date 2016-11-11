@@ -5,7 +5,7 @@ import java.util.concurrent.Executors
 import akka.actor.Actor
 import com.typesafe.scalalogging.LazyLogging
 import net.earthson.task.db.TaskDB
-import play.api.db.slick.DatabaseConfigProvider
+import play.api.Application
 import slick.jdbc.GetResult
 
 import scala.concurrent.duration._
@@ -18,9 +18,10 @@ object Manager {
   case object JobComplete
 
   case object TimeoutCleaned
+
 }
 
-class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvider)
+class Manager(override val app: Application)
   extends Actor
     with TaskDB
     with LazyLogging {
@@ -100,7 +101,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
             ctrls =>
               val size = ctrls.map(_.limit).sum
               val curTime = System.currentTimeMillis()
-              db.run {
+              taskDBConfig.db.run {
                 {
                   for {
                     res <- TableTask.filter(_.pool === pool)
@@ -148,7 +149,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
           bulkOp[FailTask]() {
             ctrls =>
               val curTime = System.currentTimeMillis()
-              db.run {
+              taskDBConfig.db.run {
                 DBIO.seq(
                   ctrls.map {
                     case FailTask(id, log, delay) =>
@@ -169,21 +170,32 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
         case _: SucceedTask =>
           bulkOp[SucceedTask]() {
             ctrls =>
+              val currentTime = System.currentTimeMillis()
               val ids = ctrls.map(_.id)
               val idsS = ids.mkString("(", ", ", ")")
-              db.run {
-                sql"""
-                   UPDATE task SET status = 'success', end_time = ${System.currentTimeMillis()}, log = '', timeout_at = NULL
-                   WHERE id IN #${idsS}
-              """.asUpdate
-              }.map(_ => ctrls.map(_ => true))
+              for {
+                tasks <- taskDBConfig.db.run {
+                  TableTask.filter(_.id inSet ids).result
+                }.map(_.map(_.copy(
+                  status = Task.Status.Success,
+                  endTime = Some(currentTime),
+                  log = "",
+                  timeoutAt = None
+                )))
+                _ <- successDBConfig.db.run {
+                  TableTask ++= tasks
+                }
+                _ <- taskDBConfig.db.run {
+                  TableTask.filter(_.id inSet ids).delete
+                }
+              } yield ctrls.map(_ => true)
           }
         case _: AddTask =>
           bulkOp[AddTask]() {
             ctrls =>
               val tasks = ctrls.map(_.task)
               assert(tasks.map(_.id).toSet.size == tasks.size)
-              db.run {
+              taskDBConfig.db.run {
                 DBIO.seq(
                   tasks.map {
                     t =>
@@ -231,7 +243,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
           bulkOp[DeleteTask]() {
             ctrls =>
               val ids = ctrls.map(_.id)
-              db.run {
+              taskDBConfig.db.run {
                 TableTask.filter(_.id inSet ids).delete
               }.map(_ => ctrls.map(_ => true))
           }
@@ -239,7 +251,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
           bulkOp[BlockTask]() {
             ctrls =>
               val ids = ctrls.map(_.id)
-              db.run {
+              taskDBConfig.db.run {
                 TableTask
                   .filter(_.id inSet ids)
                   .filter(_.status === Task.Status.Pending)
@@ -251,7 +263,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
           bulkOp[UnblockTask]() {
             ctrls =>
               val ids = ctrls.map(_.id)
-              db.run {
+              taskDBConfig.db.run {
                 TableTask
                   .filter(_.id inSet ids)
                   .filter(_.status === Task.Status.Block)
@@ -264,7 +276,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
           bulkOp[RecoverTask]() {
             ctrls =>
               val ids = ctrls.map(_.id)
-              db.run {
+              taskDBConfig.db.run {
                 TableTask
                   .filter(_.id inSet ids)
                   .filter(_.status === Task.Status.Failed)
@@ -277,7 +289,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
           bulkOp[RecoverPool]() {
             ctrls =>
               val pools = ctrls.map(_.pool).toSet
-              db.run {
+              taskDBConfig.db.run {
                 TableTask
                   .filter(_.pool inSet pools)
                   .filter(_.status === Task.Status.Failed)
@@ -291,7 +303,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
           } {
             ctrls =>
               val types = ctrls.map(c => s"""'${c.`type`}'""").mkString("(", ", ", ")")
-              db.run {
+              taskDBConfig.db.run {
                 sql"""
                  SELECT task.*
                  FROM task
@@ -318,7 +330,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
           } {
             ctrls =>
               val groups = ctrls.map(c => c.group.map(s => s"""'$s'""").getOrElse("NULL")).mkString("(", ", ", ")")
-              db.run {
+              taskDBConfig.db.run {
                 sql"""
                  SELECT task.*
                  FROM task
@@ -343,7 +355,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
           bulkOp[DoTaskTimeout.type]() {
             ctrls => {
               val curTime = System.currentTimeMillis()
-              db.run {
+              taskDBConfig.db.run {
                 sql"""
                       UPDATE task
                       SET
@@ -356,6 +368,7 @@ class Manager(implicit override val databaseConfigProvider: DatabaseConfigProvid
               }.map(_ => ctrls.map(_ => TimeoutCleaned))
             }
           }
+
       }
     }
 

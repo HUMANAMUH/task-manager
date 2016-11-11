@@ -7,6 +7,7 @@ import akka.pattern._
 import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
 import net.earthson.task._
+import play.api.{Application, Play}
 import play.api.db.slick.DatabaseConfigProvider
 import play.api.libs.json._
 import play.api.mvc._
@@ -27,14 +28,14 @@ import scala.util.{Failure, Success, Try}
   *                    asynchronous code.
   */
 @Singleton
-class TaskController @Inject()(actorSystem: ActorSystem)(implicit exec: ExecutionContext, databaseConfigProvider: DatabaseConfigProvider)
+class TaskController @Inject()(actorSystem: ActorSystem)(implicit exec: ExecutionContext, appProvider: Provider[Application])
   extends Controller
     with LazyLogging
 {
 
   implicit val askTimeout: Timeout = 10 seconds
 
-  val taskManager = actorSystem.actorOf(Props(new Manager()), "manager")
+  val taskManager = actorSystem.actorOf(Props(new Manager(appProvider.get())), "manager")
 
   def try2future[T](t: Try[T]): Future[T] = {
     t match {

@@ -4,18 +4,23 @@ import java.sql.SQLException
 
 import akka.actor.ActorRef
 import com.typesafe.scalalogging.LazyLogging
-import play.api.db.slick.{DatabaseConfigProvider, HasDatabaseConfig}
+import play.api.Application
+import play.api.db.slick.DatabaseConfigProvider
 import slick.driver.{JdbcProfile, SQLiteDriver}
 
 import scala.util.{Failure, Success, Try}
 
 trait TaskDB
   extends TaskTables
-    with HasDatabaseConfig[JdbcProfile]
     with LazyLogging {
-  def databaseConfigProvider: DatabaseConfigProvider
 
-  override val dbConfig = databaseConfigProvider.get[JdbcProfile]
+  implicit def app: Application
+
+  val taskDBConfig = DatabaseConfigProvider.get[JdbcProfile]("default")
+
+  val successDBConfig = DatabaseConfigProvider.get[JdbcProfile]("success")
+
+  val driver = SQLiteDriver
 
   def doOnComplete[T](dst: ActorRef, id: Option[String] = None)(result: Try[T]): Unit = result match {
     //case Failure(_: MySQLIntegrityConstraintViolationException) => dst ! Failure(KeyDuplicateError(id.get))
@@ -41,13 +46,14 @@ object TaskDB
   extends TaskTables {
 
   override protected val driver: JdbcProfile = SQLiteDriver
+  import driver.SchemaDescription
   import driver.api._
 
-  def evolutionStr() = {
+  def evolutionStr(schemas: Seq[SchemaDescription]) = {
     val createAll =
-      tables.flatMap(_.schema.createStatements.map(_ + ";")).mkString("\n")
+      schemas.flatMap(_.createStatements.map(_ + ";")).mkString("\n")
     val dropAll =
-      tables.reverse.flatMap(_.schema.dropStatements.map(_ + ";")).mkString("\n")
+      schemas.reverse.flatMap(_.dropStatements.map(_ + ";")).mkString("\n")
     s"""
        |# --- !Ups
        |
@@ -60,10 +66,15 @@ object TaskDB
      """.stripMargin
   }
 
-  def genEvolutions(version: Int) = {
+  def writeToFile(path: String)(f: => String): Unit = {
     import java.io._
-    val pw = new PrintWriter(new File(s"conf/evolutions/default/$version.sql"))
-    pw.write(evolutionStr())
+    val pw = new PrintWriter(new File(path))
+    pw.write(f)
     pw.close()
+  }
+
+  def writeEvolutions(version: Int): Unit = {
+    writeToFile(s"conf/evolutions/default/$version.sql")(evolutionStr(TableTask.schema :: Nil))
+    writeToFile(s"conf/evolutions/success/$version.sql")(evolutionStr(TableSuccess.schema :: Nil))
   }
 }

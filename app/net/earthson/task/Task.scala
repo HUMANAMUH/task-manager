@@ -54,10 +54,3 @@ object Task {
 
   implicit val fmt = Json.format[Task]
 }
-
-/**
-  *
-  * @param id
-  * @param time time that task enqueue
-  */
-case class TaskIn(id: Long, time: Long)

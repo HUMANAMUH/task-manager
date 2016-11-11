@@ -1,6 +1,6 @@
 package net.earthson.task.db
 
-import net.earthson.task.{Task, TaskIn}
+import net.earthson.task.Task
 import slick.driver.JdbcProfile
 
 trait TaskTables {
@@ -9,11 +9,8 @@ trait TaskTables {
   import driver.api._
 
 
-  /**
-    *
-    * @param tag
-    */
-  class TableTask(tag: Tag) extends Table[Task](tag, "task") {
+  abstract class TableTaskBase(tag: Tag) extends Table[Task](tag, "task") {
+
     def id = column[Long]("id", O.PrimaryKey)
 
     def pool = column[String]("pool")
@@ -48,15 +45,13 @@ trait TaskTables {
 
     def timeoutAt = column[Option[Long]]("timeout_at")
 
-    def idx1 = index("idx_query", (pool, `type`, key), unique = true)
+    def idxStatus = index("idx_status", (status, scheduledTime))
 
-    def idx2 = index("idx_status", (status, scheduledTime))
+    def idxGroupSched = index("idx_group_sched", (pool, group, scheduledAt))
 
-    def idx3 = index("idx_group_sched", (pool, group, scheduledAt))
+    def idxTypeSched = index("idx_type_sched", (pool, `type`, scheduledAt))
 
-    def idx4 = index("idx_type_sched", (pool, `type`, scheduledAt))
-
-    def * =
+    def projection =
       (
         id,
         pool,
@@ -79,10 +74,19 @@ trait TaskTables {
         ((Task.apply _).tupled, Task.unapply)
   }
 
+  class TableTask(tag: Tag) extends TableTaskBase(tag) {
+    def idxMain = index("idx_query", (pool, `type`, key), unique = true)
+
+    override def * = projection
+  }
+
+  class TableSuccess(tag: Tag) extends TableTaskBase(tag) {
+    def idxMain = index("idx_query", (pool, `type`, key))
+
+    override def * = projection
+  }
+
   val TableTask = TableQuery[TableTask]
 
-  val tables =
-    Seq(
-      TableTask
-    )
+  val TableSuccess = TableQuery[TableSuccess]
 }
