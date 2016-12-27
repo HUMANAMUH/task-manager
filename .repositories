@@ -1,4 +1,4 @@
 [repositories]
-    local
-    di-ivy-proxy-releases: http://d181.mlamp.co/nexus/content/groups/ivys/, [organization]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]
-    di-maven-proxy-releases: http://d181.mlamp.co/nexus/content/groups/public/
+  local
+  my-ivy-proxy-releases: http://nexus/nexus/repository/ivy_public/, [organization]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]
+  my-maven-proxy-releases: http://nexus/nexus/repository/public/
