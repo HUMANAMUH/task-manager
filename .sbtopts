@@ -1,2 +1,2 @@
--Dsbt.override.build.repos=true
--Dsbt.repository.config=".repositories"
+#-Dsbt.override.build.repos=true
+#-Dsbt.repository.config=".repositories"

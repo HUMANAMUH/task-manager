@@ -1,4 +1,4 @@
-[repositories]
-  local
-  my-ivy-proxy-releases: http://nexus/nexus/repository/ivy_public/, [organization]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]
-  my-maven-proxy-releases: http://nexus/nexus/repository/public/
+#[repositories]
+#  local
+#  my-ivy-proxy-releases: http://nexus/nexus/repository/ivy_public/, [organization]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]
+#  my-maven-proxy-releases: http://nexus/nexus/repository/public/
